@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+.ipynb_checkpoints/
+.DS_Store
+.env
+# raw TTS intermediates; commit final clips deliberately
+audio/tmp/
