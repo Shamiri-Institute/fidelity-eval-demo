@@ -1,5 +1,9 @@
 """Builds the follow-along notebook as raw .ipynb JSON (nbformat 4.5)."""
 import json, sys, uuid
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+REPO_RAW = ""  # set to "https://raw.githubusercontent.com/<owner>/<repo>/main/" once the repo is public
 
 cells = []
 def md(s): cells.append(("markdown", s.strip("\n")))
@@ -104,49 +108,13 @@ def _build(seed=2026, N=180):
 
 sessions_raw, human_raw, ai_scores = _build()
 
-# --- one short recording, transcribed three ways (synthetic, code-switched English / Swahili / Sheng)
-transcripts = pd.DataFrame({
-  "verbatim (what was said)": [
-    "okay guys karibuni tena eh today we are talking about gratitude",
-    "who can tell me what gratitude means",
-    "it is like um being thankful for what you have",
-    "sawa sawa exactly being thankful even for small things",
-    "kwa mfano mimi niko grateful for my mum manze",
-    "nice one and how did that make you feel",
-    "nilifeel poa sana like nimeheshimiwa",
-    "let us write three things we are grateful for this week",
-  ],
-  "human A": [
-    "Okay guys, karibuni tena. Today we are talking about gratitude.",
-    "Who can tell me what gratitude means?",
-    "It is like being thankful for what you have.",
-    "Sawa, exactly, being thankful even for small things.",
-    "Kwa mfano mimi niko grateful for my mum.",
-    "Nice one. How did that make you feel?",
-    "Nilifeel poa sana, like nimeheshimiwa.",
-    "Let us write three things we are grateful for.",
-  ],
-  "human B": [
-    "Ok guys karibuni tena, today we're talking about gratitude",
-    "Who can tell me what gratitude means",
-    "It's like being thankful for what you have",
-    "Sawasawa, exactly, being thankful for small things",
-    "Kwa mfano mimi niko grateful for my mum, maze",
-    "Nice one, how did that make you feel",
-    "I felt very good, like I was respected",
-    "Let's write 3 things we're grateful for this week",
-  ],
-  "AI model": [
-    "okay guys karibuni tena eh today we are talking about gratitude",
-    "who can tell me what gratitude means",
-    "it is like um being thankful for what you have",
-    "sawa sawa exactly being thankful even for small thing",
-    "kwa mfano mimi nko grateful for my mum manze",
-    "nice one and how did that make you feel",
-    "nilifil poa sana like nimeheshimiwa",
-    "let us write three things we are grateful for this week",
-  ],
-})
+# --- five synthetic clips: scripted, spoken by text-to-speech, transcribed by a real model (see Step 3)
+REPO_RAW = "__REPO_RAW__"   # public raw-file URL of the repo; empty means use the copy embedded below
+try:
+    asr_clips = pd.read_csv(REPO_RAW + "data/asr_demo.csv")
+except Exception:
+    import io; asr_clips = pd.read_csv(io.StringIO(r"""__ASR_CSV__"""))
+asr_clips = asr_clips.fillna("")
 
 # --- seeded safety test set: 20 genuine current-risk cases, 40 look-alikes (no real disclosures; labels only)
 _r = np.random.default_rng(7)
@@ -170,7 +138,7 @@ safety.loc[~safety.ai_flagged, "ai_timeframe"] = None
 print("Built:")
 print(f"  human_raw     {human_raw.shape[0]} rating rows over {human_raw.session_id.nunique()} session ids")
 print(f"  ai_scores     {ai_scores.shape[0]} rows (prompt v1 x 3 draws, prompt v2 x 1 draw)")
-print(f"  transcripts   1 recording, {len(transcripts)} lines, 4 versions")
+print(f"  asr_clips     {len(asr_clips)} synthetic recordings, each transcribed twice by a real model")
 print(f"  safety        {len(safety)} seeded test cases")
 ''')
 
@@ -287,13 +255,42 @@ md(r"""
 ---
 ## Step 3 · Check the upstream component: the transcript
 
-The judge reads a transcript, not audio. If the transcript is wrong, the scores measure the transcription, not the Fellow. Below, one short (synthetic) clip of code-switched English, Swahili and Sheng was transcribed by two people and by the model.
+The judge reads a transcript, not audio. If the transcript is wrong, the scores measure the transcription, not the Fellow.
+
+Real evaluations have a gap here: nobody knows exactly what was said, so you score the model against a human transcript and hope the human got it right. For this demo we closed that gap:
+
+| | what it is |
+|---|---|
+| **script** | Five short sessions we wrote in code-switched English, Swahili and Sheng. Synthetic. |
+| **audio** | Each script read aloud by text-to-speech, one voice per speaker. Synthetic. Takes where the voice repeated or ad-libbed a line were re-recorded, so the script is exactly what was said. |
+| **model** | Real output from `gemini-3.7-flash`, the transcription model from our evaluation, run **twice** on each clip. |
+| **human A, human B** | Clip 1 only. **Hand-written** to show two common transcriber styles. Not real transcribers. |
 """)
 code(r'''
-transcripts
+import textwrap
+from IPython.display import Audio, display
+clip1 = asr_clips.set_index("clip_id").loc["clip_01"]
+if REPO_RAW: display(Audio(REPO_RAW + "audio/clip_01.mp3"))
+for col, label in [("verbatim", "SCRIPT (what was said)"), ("human_a", "HUMAN A"),
+                   ("human_b", "HUMAN B"), ("ai_model", "MODEL")]:
+    print(f"── {label}\n{textwrap.fill(clip1[col], 100)}\n")
 ''')
 code(r'''
-def norm(s): return re.sub(r"[^\w\s]", "", s.lower()).split()
+# Normalise before comparing: case, punctuation, contractions, numbers, and a few
+# spelling conventions (hio/hiyo, ndo/ndio). A compact copy of our evaluation's rules.
+CONTRACTIONS = {"it's": "it is", "that's": "that is", "we're": "we are", "let's": "let us",
+                "i'm": "i am", "you're": "you are", "don't": "do not", "can't": "can not"}
+FOLD = {**{w: "h" + w for w in "ii iyo izi izo uyu uyo awa ao apa apo uku uko ivi ivyo ata adi".split()},
+        "hio": "hiyo", "ndo": "ndio", "ndiyo": "ndio", "practise": "practice", "maths": "math"}
+NUMS = ("zero one two three four five six seven eight nine ten eleven twelve thirteen "
+        "fourteen fifteen sixteen seventeen eighteen nineteen twenty").split()
+
+def norm(s):
+    s = re.sub(r"[^\w'\-\s]", " ", s.lower().replace("’", "'"))
+    s = re.sub(r"(?<!\w)['\-]|['\-](?!\w)", " ", s)
+    words = [FOLD.get(w, w) for t in s.split() for w in CONTRACTIONS.get(t, t).split()]
+    return [n for w in words for n in
+            ([NUMS[int(w)]] if w.isdigit() and int(w) <= 20 else [NUMS[int(d)] for d in w] if w.isdigit() else [w])]
 
 def edit_distance(a, b):
     prev = list(range(len(b) + 1))
@@ -309,13 +306,37 @@ def wer(ref, hyp):
 def cer(ref, hyp):
     r, h = " ".join(norm(ref)), " ".join(norm(hyp)); return edit_distance(r, h) / len(r)
 
-whole = {c: " ".join(transcripts[c]) for c in transcripts.columns}
-pairs = [("verbatim (what was said)", "human A"), ("verbatim (what was said)", "human B"),
-         ("verbatim (what was said)", "AI model"), ("human A", "human B"),
-         ("human A", "AI model"), ("human B", "AI model")]
-asr = pd.DataFrame([{"reference": r, "compared with": h, "CER": cer(whole[r], whole[h]),
-                     "WER": wer(whole[r], whole[h])} for r, h in pairs])
+NAMES = {"verbatim": "script", "human_a": "human A", "human_b": "human B",
+         "ai_model": "model", "ai_model_run2": "model, 2nd run"}
+pairs = [("verbatim", "human_a"), ("verbatim", "human_b"), ("verbatim", "ai_model"),
+         ("human_a", "human_b"), ("human_a", "ai_model"), ("human_b", "ai_model"),
+         ("ai_model", "ai_model_run2")]
+asr = pd.DataFrame([{"reference": NAMES[r], "compared with": NAMES[h],
+                     "CER": cer(clip1[r], clip1[h]), "WER": wer(clip1[r], clip1[h])} for r, h in pairs])
 asr.round(3)
+''')
+md(r"""
+Read the table from the top:
+- **Against the truth, the model does about as well as the careful human** (CER 0.06 each), and better than human B, who translated a line into English.
+- **The two humans disagree with each other more than the model errs.** If human B were your only reference, the model would look about three times worse than it is. Much of what gets called "model error" is the **reference**.
+- **The model barely disagrees with itself.** Two runs on the same audio differ by about 1% of characters. Two people transcribing the same audio don't come close to that.
+
+This is the same pattern we found on real sessions: two transcribers of the same recording agreed less with each other than either agreed with the model.
+""")
+code(r'''
+per_clip = pd.DataFrame({"CER: model vs script": [cer(c.verbatim, c.ai_model) for c in asr_clips.itertuples()],
+                         "CER: model vs its 2nd run": [cer(c.ai_model, c.ai_model_run2) for c in asr_clips.itertuples()]},
+                        index=asr_clips.clip_id)
+print(per_clip.round(3).to_string(), "\n")
+print("mean:", per_clip.mean().round(3).to_dict())
+''')
+code(r'''
+import difflib
+print("Every place the model's clip-1 transcript differs from the script:")
+r, h = norm(clip1.verbatim), norm(clip1.ai_model)
+for op, i1, i2, j1, j2 in difflib.SequenceMatcher(None, r, h, autojunk=False).get_opcodes():
+    if op != "equal":
+        print(f"   said: {' '.join(r[i1:i2]) or '(nothing)':12s} → model wrote: {' '.join(h[j1:j2]) or '(nothing)'}")
 ''')
 code(r'''
 print("Why CER (characters) and not just WER (words) for code-switched speech:")
@@ -324,9 +345,9 @@ for ref, hyp in [("sawa sawa", "sawasawa"), ("manze", "maze"), ("nilifeel poa", 
 ''')
 md(r"""
 Notice three things:
-- **By CER, the two humans disagree with each other more than either disagrees with the model.** Human A tidied fillers and dropped a few words; Human B used contractions, translated a line into English and trimmed others. Neither is wrong, but neither is verbatim.
-- In real evaluations you rarely have the "verbatim" row, so you score the model against one human and call the gap "model error". Much of that gap is the **reference**.
-- WER punishes a one-letter spelling difference in Sheng as a whole wrong word. CER is fairer to languages without a fixed spelling.
+- **The Sheng and Swahili came through almost untouched.** The model's differences are spelling conventions (`sawa sawa` / `sawasawa`, `aah` / `ah`) plus **one real error: it wrote a whole sentence twice.** Repeating a span is a known failure of this kind of model, and it matters downstream: a judge counting how often the Fellow asked about feelings would count that question twice.
+- **WER punishes a one-letter spelling difference in Sheng as a whole wrong word.** CER is fairer to languages without a fixed spelling, so lead with CER.
+- **Be honest about what this test can't show.** This audio is clean: one speaker at a time, no overlap, no classroom noise. It is easier than a real session, so treat these error rates as a floor, not an estimate.
 
 The question that matters is the downstream one: *does a worse transcript change the fidelity score?* Test it directly: score the same sessions from a human transcript and from the model transcript, and compare the scores pairwise.
 
@@ -529,7 +550,7 @@ code(r'''
 scorecard = pd.DataFrame([
     ("1 Reference audited", f"{len(dup_groups)} duplicate recordings, {len(bad_total)} bad totals, {len(missing)} missing rows fixed", "Done"),
     ("2 Human ceiling", f"ICC {icc:.2f}; best possible r vs two raters ≈ {ceiling_2:.2f}", "Report against this"),
-    ("3 Transcripts", f"Humans disagree with each other (CER {asr.iloc[3].CER:.2f}) more than with the model", "Check the reference"),
+    ("3 Transcripts", f"Two humans disagree (CER {asr.iloc[3].CER:.2f}) more than the model errs (CER {asr.iloc[2].CER:.2f})", "Check the reference"),
     ("4 Judge vs humans", f"r {r_comp:.2f} = {r_comp / ceiling_2:.0%} of ceiling; adherence item collapsed", "Fix or drop the item"),
     ("5 Traps", f"Constant beats corrected score on MAE; identical runs on 30 sessions span r by {spread:.2f}", "Multiple runs, paired tests"),
     ("6 Prompt v2", f"Composite +{paired.composite.mean():.2f}, driven by adherence", "Adopt; re-check ranking"),
@@ -566,6 +587,7 @@ nb = {"nbformat": 4, "nbformat_minor": 5,
                    "colab": {"provenance": [], "toc_visible": True}},
       "cells": []}
 for i, (kind, src) in enumerate(cells):
+    src = src.replace("__REPO_RAW__", REPO_RAW).replace("__ASR_CSV__", (ROOT / "data/asr_demo.csv").read_text())
     lines = src.splitlines(True)
     cell = {"cell_type": kind, "id": f"c{i:02d}", "metadata": {}, "source": lines}
     if kind == "code": cell.update({"execution_count": None, "outputs": []})

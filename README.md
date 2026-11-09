@@ -11,9 +11,10 @@ Nothing in this repo comes from real sessions, students, Fellows or schools. Kee
 | `notebooks/fidelity_eval_walkthrough.ipynb` | Audience copy, no outputs. Runs in Colab with no installs and no data files. |
 | `notebooks/fidelity_eval_walkthrough_with_outputs.ipynb` | Presenter backup with every output saved, for when the Wi-Fi fails. |
 | `tools/build_nb.py` | **Source of truth.** Writes the notebook from Python. Edit this, not the `.ipynb`. |
+| `tools/make_audio.py` | Synthesizes the Step 3 clips (Gemini TTS), transcribes them, writes `data/asr_demo.csv`. Cached in `audio/tmp/`. |
 | `tools/run_nb.py` | Minimal executor that runs every cell in order and saves outputs. Use it if Jupyter isn't installed. |
 | `docs/PLAN.md` | Next piece of work: synthetic audio for Step 3. |
-| `audio/` | Where generated session scripts and audio will live. |
+| `audio/` | Step 3 clip scripts (`scripts/`) and the synthesized MP3s. |
 
 ## Build and run
 
@@ -39,5 +40,6 @@ uv run python tools/run_nb.py notebooks/fidelity_eval_walkthrough.ipynb notebook
 ## Status (November 9)
 
 - All cells run end to end with `tools/run_nb.py`. **Not yet tested in real Colab.**
-- Step 3's "AI model" transcript is **hand-written**, not real ASR output. See `docs/PLAN.md`.
+- Step 3 uses five synthetic clips (`audio/`), transcribed twice each by `gemini-3.7-flash` (`data/asr_demo.csv`, built by `tools/make_audio.py`). The two human transcripts of clip 1 are still hand-written. Production's `gemini-2.5-flash` is not served on Vertex for our project, so the eval's candidate model stands in.
+- Set `REPO_RAW` in `tools/build_nb.py` once the repo is public: the notebook then loads the CSV from GitHub and plays clip 1 in Step 3.
 - Before the session: publish the audience notebook somewhere public, make the Colab link, put it behind the QR code on the holding slide.

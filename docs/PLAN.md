@@ -55,9 +55,9 @@ Use whichever transcription model is the current production one, so the demo ref
 
 ## Definition of done
 
-- [ ] 4–6 synthetic clips with scripts, audio and real model transcripts in the repo
-- [ ] Step 3 uses real model output, with labels that say what is synthetic and what is real
-- [ ] Notebook rebuilt and re-run; the CER comparison still makes its point. If the real model doesn't beat human-vs-human disagreement on this audio, **report that honestly** rather than tuning the clips until it does
+- [x] 4–6 synthetic clips with scripts, audio and real model transcripts in the repo
+- [x] Step 3 uses real model output, with labels that say what is synthetic and what is real
+- [x] Notebook rebuilt and re-run; the CER comparison still makes its point. If the real model doesn't beat human-vs-human disagreement on this audio, **report that honestly** rather than tuning the clips until it does
 - [ ] Tested once in Google Colab from a clean browser
 - [ ] Repo (or a public copy of `notebooks/` + `data/`) published, Colab link working
 
