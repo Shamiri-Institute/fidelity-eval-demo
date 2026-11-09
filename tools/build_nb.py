@@ -3,7 +3,7 @@ import json, sys, uuid
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-REPO_RAW = ""  # set to "https://raw.githubusercontent.com/<owner>/<repo>/main/" once the repo is public
+REPO_RAW = "https://raw.githubusercontent.com/Shamiri-Institute/fidelity-eval-demo/main/"
 
 cells = []
 def md(s): cells.append(("markdown", s.strip("\n")))
@@ -268,7 +268,7 @@ Real evaluations have a gap here: nobody knows exactly what was said, so you sco
 """)
 code(r'''
 import textwrap
-from IPython.display import Audio, display
+from IPython.display import Audio
 clip1 = asr_clips.set_index("clip_id").loc["clip_01"]
 if REPO_RAW: display(Audio(REPO_RAW + "audio/clip_01.mp3"))
 for col, label in [("verbatim", "SCRIPT (what was said)"), ("human_a", "HUMAN A"),

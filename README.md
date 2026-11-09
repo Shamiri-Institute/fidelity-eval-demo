@@ -41,5 +41,5 @@ uv run python tools/run_nb.py notebooks/fidelity_eval_walkthrough.ipynb notebook
 
 - All cells run end to end with `tools/run_nb.py`. **Not yet tested in real Colab.**
 - Step 3 uses five synthetic clips (`audio/`), transcribed twice each by `gemini-3.7-flash` (`data/asr_demo.csv`, built by `tools/make_audio.py`). The two human transcripts of clip 1 are still hand-written. Production's `gemini-2.5-flash` is not served on Vertex for our project, so the eval's candidate model stands in.
-- Set `REPO_RAW` in `tools/build_nb.py` once the repo is public: the notebook then loads the CSV from GitHub and plays clip 1 in Step 3.
-- Before the session: publish the audience notebook somewhere public, make the Colab link, put it behind the QR code on the holding slide.
+- Public at https://github.com/Shamiri-Institute/fidelity-eval-demo. `REPO_RAW` in `tools/build_nb.py` points at it, so the notebook loads the CSV from GitHub (falling back to its embedded copy) and plays clip 1 in Step 3.
+- Colab link (for the QR code on the holding slide): https://colab.research.google.com/github/Shamiri-Institute/fidelity-eval-demo/blob/main/notebooks/fidelity_eval_walkthrough.ipynb
